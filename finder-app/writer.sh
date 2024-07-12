@@ -17,4 +17,4 @@ echo "$writestr" > "$writefile" || {
 	exit 1
 }
 
-echo "File created sucessfully: $writefile!"
+echo "File created sucessfully: $writefile"

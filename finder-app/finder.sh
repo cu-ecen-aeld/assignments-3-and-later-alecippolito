@@ -2,6 +2,7 @@
 # Shell script for finder which finds number of files in directory as well as number of matching lines including error checking
 # Author: Alec Ippolito
 
+
 if [ "$#" -ne 2 ]
 then
 	echo "Error: 2 arrguments expected as [filesdir] [searchstr] but were not provided."

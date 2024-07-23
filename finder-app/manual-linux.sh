@@ -48,7 +48,7 @@ cd "$OUTDIR"
 if [ -d "${OUTDIR}/rootfs" ]
 then
 	echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
-    sudo rm  -rf ${OUTDIR}/rootfs
+    	sudo rm  -rf ${OUTDIR}/rootfs
 fi
 
 # TODO: Create necessary base directories
@@ -76,7 +76,30 @@ fi
 make distclean
 make defconfig
 make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j$(nproc)
-make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install   
+make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install  
+
+# Crosss compiling bash so that sh works for finder.sh: https://wiki.beyondlogic.org/index.php?title=Cross_Compiling_BusyBox_for_ARM
+mkdir -p ${OUTDIR}/bash
+cd ${OUTDIR}/bash
+BASH_REPO='https://ftp.gnu.org/gnu/bash/bash-5.2.tar.gz'
+BASH_VERSION=5.2
+wget ${BASH_REPO} -O bash-${BASH_VERSION}.tar.gz
+if [ ! -f bash-${BASH_VERSION}.tar.gz ];
+then 
+	echo "Failed downloading"
+	exit 1
+fi
+tar -xvf bash-${BASH_VERSION}.tar.gz
+if [ ! -d bash-${BASH_VERSION} ];
+then 
+	echo "Failed ver downloading"
+	exit 1
+fi
+cd bash-${BASH_VERSION}
+./configure --prefix=${OUTDIR}/bash-install --host=${CROSS_COMPILE%?}
+make -j$(nproc)
+make install
+cp ${OUTDIR}/bash-install/bin/bash ${OUTDIR}/rootfs/bin/
 
 echo "Library dependencies"
 cd ${OUTDIR}/rootfs
@@ -111,11 +134,12 @@ cp -a writer ${OUTDIR}/rootfs/home/
 echo "Copy the finder related scripts and executables to the /home directory on the target rootfs"
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp -a ${FINDER_APP_DIR}/finder.sh ${OUTDIR}/rootfs/home/
-cp -a ${FINDER_APP_DIR}/finder-test.sh ${OUTDIR}/rootfs/home/
-cp -a ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
-cp -a ${FINDER_APP_DIR}/conf/assignment.txt ${OUTDIR}/rootfs/home/conf/
-cp -a ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
+cp ${FINDER_APP_DIR}/finder.sh ${OUTDIR}/rootfs/home/
+cp ${FINDER_APP_DIR}/finder-test.sh ${OUTDIR}/rootfs/home/
+cp ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
+cp ${FINDER_APP_DIR}/conf/assignment.txt ${OUTDIR}/rootfs/home/conf/
+cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
+# 
 
 echo "Chown the root directory"
 # TODO: Chown the root directory

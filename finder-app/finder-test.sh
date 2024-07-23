@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 # Tester script for assignment 1 and assignment 2
-# Author: Siddhant Jajoo, Alec Ippolito
+# Author: Siddhant Jajoo
 
 set -e
 set -u
@@ -55,6 +55,7 @@ fi
 for i in $( seq 1 $NUMFILES)
 do
 	./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+
 done
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")

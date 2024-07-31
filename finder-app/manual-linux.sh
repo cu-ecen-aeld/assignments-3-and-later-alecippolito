@@ -84,17 +84,7 @@ cd ${OUTDIR}/bash
 BASH_REPO='https://ftp.gnu.org/gnu/bash/bash-5.2.tar.gz'
 BASH_VERSION=5.2
 wget ${BASH_REPO} -O bash-${BASH_VERSION}.tar.gz
-if [ ! -f bash-${BASH_VERSION}.tar.gz ];
-then 
-	echo "Failed downloading"
-	exit 1
-fi
 tar -xvf bash-${BASH_VERSION}.tar.gz
-if [ ! -d bash-${BASH_VERSION} ];
-then 
-	echo "Failed ver downloading"
-	exit 1
-fi
 cd bash-${BASH_VERSION}
 ./configure --prefix=${OUTDIR}/bash-install --host=${CROSS_COMPILE%?}
 make -j$(nproc)

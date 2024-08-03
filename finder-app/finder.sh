@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Shell script for finder which finds number of files in directory as well as number of matching lines including error checking
 # Author: Alec Ippolito
 

@@ -1,3 +1,6 @@
+// Socket Server program
+// Author: Alec Ippoltio
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +18,7 @@
 // Define constants
 #define PORT 9000
 #define FILE_PATH "/var/tmp/aesdsocketdata"
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 1024
 #define PID_FILE "/var/run/aesdsocket.pid"
 
 int client_sockfd = -1;
@@ -54,13 +57,15 @@ void setup_signals(){
 
 void daemonize() {
     pid_t pid = fork();
+    setup_signals();
+    syslog(LOG_INFO, "Attemtping Daemon");
     if (pid < 0) {
         syslog(LOG_ERR, "Failed to fork: %s", strerror(errno));
         exit(1);
     } else if (pid > 0) {
         exit(0);
     }
-
+   
     if (setsid() < 0) {
         syslog(LOG_ERR, "Failed to create new session id: %s", strerror(errno));
         exit(1);
@@ -73,18 +78,12 @@ void daemonize() {
     } else if (pid > 0) {
         exit(0);
     }
-
+	/*
     if (chdir("/") < 0) {
         syslog(LOG_ERR, "Changing directory failed: %s", strerror(errno));
         exit(1);
     }
-
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-    open("/dev/null", O_RDWR);
-    dup(0);
-    dup(0);
+    	*/
 
 
 }
@@ -107,12 +106,27 @@ int main(int argc, char *argv[]) {
 	// Create Socket
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
-	syslog(LOG_ERR, "Error creating socket: %s", strerror(errno));
-	closelog();
-	return -1;
+		syslog(LOG_ERR, "Error creating socket: %s", strerror(errno));
+		closelog();
+		return -1;
+	}	
+	int optval = 1;
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+	
+	// Make address reusable
+	/*
+	int optval = 1;
+	if ((setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))<= 0){
+		syslog(LOG_ERR, "Error making adress reuable: %s", strerror(errno));
+		close(sockfd);
+		freeaddrinfo(serv
+		return -1;
 	}
+	*/
+	
+	// syslog(LOG_INFO, "Successfully made address reuable");
 	syslog(LOG_INFO, "Successfully created socket with id: %d", sockfd);
-
+	
 	// Bind Socket to port
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -206,19 +220,14 @@ int main(int argc, char *argv[]) {
 				break;
 			}
 		}
-		
 		close(file_fd);
 		close(client_sockfd);
 		client_sockfd = -1;
 
+
 		syslog(LOG_INFO, "Closed connection from %s", client_ip);
 	}
-        if (client_sockfd >= 0) {
-    		close(client_sockfd);
-        }
-        if (sockfd >= 0) {
-		close(sockfd);
-        }
+
         if (remove(FILE_PATH) != 0) {
         	syslog(LOG_ERR, "Failed to delete the file %s: %s", FILE_PATH, strerror(errno));
         }

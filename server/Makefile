@@ -1,16 +1,31 @@
+# Makefile
+# Author: ALce Ippolito
+
+# Compiler and flags
 CC = gcc
-CROSS_COMPILE ?= 
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -O2 -Werror
 
-all: aesdsocket
+# Target executable
+TARGET = aesdsocket
 
-aesdsocket: aesdsocket.o
-	$(CROSS_COMPILE)$(CC) -o aesdsocket aesdsocket.o
+# Source files
+SRCS = aesdsocket.c
 
-aesdsocket.o: aesdsocket.c
-	$(CROSS_COMPILE)$(CC) $(CFLAGS) -g -c aesdsocket.c -o aesdsocket.o
+# Object files (can be automatically derived from SRCS)
+OBJS = $(SRCS:.c=.o)
 
+# Default rule
+all: $(TARGET)
+
+# Rule to build the target
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -g -o $(TARGET) $(OBJS)
+
+# Rule to clean the build
 clean:
-	rm -f aesdsocket.o aesdsocket
-	
+	rm -f $(TARGET) $(OBJS)
+
+# Rule to build object files from source files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 

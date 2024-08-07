@@ -1,33 +1,41 @@
 #!/bin/sh
 
+# Path to the aesdsocket executable
+DAEMON="/usr/bin/aesdsocket"
+
+start() {
+    # Start the daemon in the background
+    echo "Starting AESD Socket Daemon"
+    $DAEMON &
+    echo $! > /var/run/aesdsocket.pid
+}
+
+stop() {
+    # Stop the daemon by sending SIGTERM
+    if [ -f /var/run/aesdsocket.pid ]; then
+        PID=$(cat /var/run/aesdsocket.pid)
+        echo "Stopping AESD Socket Daemon"
+        kill -TERM $PID
+        rm /var/run/aesdsocket.pid
+    else
+        echo "PID file not found. Daemon might not be running."
+    fi
+}
+
 case "$1" in
-	start) 
-		# start case as argument
-		echo "Starting AESD Socket Daemon"
-		start-stop-daemon -S -n aesdsocket -a /usr/bin/aesdsocket -d
-		# Check success
-		if [ $? -eq 0 ]; then
-			echo "AESD Socket Daemon succesfully started"
-		else
-			echo "AESD Socket Daemon failed on start"
-		fi
-		;;
-	stop)
-		# stop case as agrument
-		echo "Stopping AESD Socket Daemon"
-		start-stop-daemon -K aesdsocket
-		# Check success
-		if [ $? -eq 0 ]; then
-			echo "AESD Socket Daemon succesfully stopped"
-		else
-			echo "AESD Socket Daemon failed on stop"
-		fi
-		;;
-	*)
-		# default case for invalid arguments
-		echo "Usaege: $0 {start|stop}"
-		;;
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
 esac
 
-# Exit with status 0 (success)
-exit 0

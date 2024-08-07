@@ -1,0 +1,33 @@
+#!/bin/sh
+
+case "$1" in
+	start) 
+		# start case as argument
+		echo "Starting AESD Socket Daemon"
+		start-stop-daemon -S -n aesdsocket -a /usr/bin/aesdsocket -d
+		# Check success
+		if [ $? -eq 0 ]; then
+			echo "AESD Socket Daemon succesfully started"
+		else
+			echo "AESD Socket Daemon failed on start"
+		fi
+		;;
+	stop)
+		# stop case as agrument
+		echo "Stopping AESD Socket Daemon"
+		start-stop-daemon -K aesdsocket
+		# Check success
+		if [ $? -eq 0 ]; then
+			echo "AESD Socket Daemon succesfully stopped"
+		else
+			echo "AESD Socket Daemon failed on stop"
+		fi
+		;;
+	*)
+		# default case for invalid arguments
+		echo "Usaege: $0 {start|stop}"
+		;;
+esac
+
+# Exit with status 0 (success)
+exit 0

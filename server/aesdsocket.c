@@ -78,12 +78,7 @@ void daemonize() {
     } else if (pid > 0) {
         exit(0);
     }
-	/*
-    if (chdir("/") < 0) {
-        syslog(LOG_ERR, "Changing directory failed: %s", strerror(errno));
-        exit(1);
-    }
-    	*/
+
 
 
 }
@@ -113,17 +108,7 @@ int main(int argc, char *argv[]) {
 	int optval = 1;
 	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 	
-	// Make address reusable
-	/*
-	int optval = 1;
-	if ((setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))<= 0){
-		syslog(LOG_ERR, "Error making adress reuable: %s", strerror(errno));
-		close(sockfd);
-		freeaddrinfo(serv
-		return -1;
-	}
-	*/
-	
+
 	// syslog(LOG_INFO, "Successfully made address reuable");
 	syslog(LOG_INFO, "Successfully created socket with id: %d", sockfd);
 	

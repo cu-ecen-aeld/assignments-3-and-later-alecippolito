@@ -1,3 +1,5 @@
+
+# Kernel Boot Log
 pci-host-generic 4010000000.pcie:      MEM 0x0010000000..0x003efeffff -> 0x0010000000
 pci-host-generic 4010000000.pcie:      MEM 0x8000000000..0xffffffffff -> 0x8000000000
 pci-host-generic 4010000000.pcie: Memory resource size exceeds max for 32 bits
@@ -48,4 +50,10 @@ scullsingle registered at f800008
 sculluid registered at f800009
 scullwuid registered at f80000a
 scullpriv registered at f80000b
+
+### Impact
+
+1. **Boot Issues**: While system boots, memory issues can lead to instability or improper functioning of hardware components, particularly those that rely on large memory allocations.
+2. **Device Initialization Failures**: PCI devices may fail to initialize properly, especially if memory cannot be allocated or mapped correctly.
+
 

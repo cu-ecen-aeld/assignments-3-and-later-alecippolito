@@ -17,14 +17,47 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
+#include <linux/slab.h> // for kmalloc, kfree
+#include <linux/uaccess.h> // for copy_to_user, copy_from_user
 #include "aesdchar.h"
+
+#define AESD_MAX_WRITE_COMMANDS 10
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Alec Ippolito"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
-struct aesd_dev aesd_device;
+// Structure to hold each write command
+struct aesd_buffer_entry {
+    char *buff;
+    size_t size;
+};
+
+struct aesd_dev {
+    struct aesd_buffer_entry entry[AESD_MAX_WRITE_COMMANDS];
+    struct cdev cdev;
+    int head;
+    int tail;
+    struct mutex lock;  // Mutex for thread safety
+};
+
+static struct aesd_dev aesd_device;
+
+struct aesd_circular_buffer {
+    struct aesd_buffer_entry entry[AESD_MAX_WRITE_COMMANDS];
+    int read_pos;
+    int write_pos;
+    spinlock_t lock;
+};
+
+// Initialize the circular buffer
+struct aesd_circular_buffer aesd_buffer = {
+    .read_pos = 0,
+    .write_pos = 0,
+    .lock = __SPIN_LOCK_UNLOCKED(aesd_buffer.lock),
+};
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
@@ -32,6 +65,7 @@ int aesd_open(struct inode *inode, struct file *filp)
     /**
      * TODO: handle open
      */
+    filp->private_data = &aesd_device; // Store device data
     return 0;
 }
 
@@ -45,26 +79,83 @@ int aesd_release(struct inode *inode, struct file *filp)
 }
 
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
-                loff_t *f_pos)
+                  loff_t *f_pos)
 {
-    ssize_t retval = 0;
-    PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
-    return retval;
+    size_t bytes_read = 0;
+    int idx = 0;
+    int total_bytes = 0;
+
+    mutex_lock(&aesd_device.lock);
+
+    // Start from the tail of the buffer and read the most recent 10 commands
+    for (idx = aesd_device.tail; idx != aesd_device.head; idx = (idx + 1) % AESD_MAX_WRITE_COMMANDS) {
+        total_bytes += aesd_device.entry[idx].size;
+    }
+
+    // Return only the requested number of bytes
+    if (count > total_bytes) {
+        count = total_bytes;
+    }
+
+    for (idx = aesd_device.tail; idx != aesd_device.head && bytes_read < count; idx = (idx + 1) % AESD_MAX_WRITE_COMMANDS) {
+        size_t remaining = count - bytes_read;
+        size_t size_to_copy = aesd_device.entry[idx].size;
+
+        if (remaining < size_to_copy) {
+            size_to_copy = remaining;
+        }
+
+        if (copy_to_user(buf + bytes_read, aesd_device.entry[idx].buff, size_to_copy)) {
+            mutex_unlock(&aesd_device.lock);
+            return -EFAULT;
+        }
+
+        bytes_read += size_to_copy;
+    }
+
+    mutex_unlock(&aesd_device.lock);
+    
+    return bytes_read;
 }
 
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
-                loff_t *f_pos)
+                   loff_t *f_pos)
 {
-    ssize_t retval = -ENOMEM;
-    PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
-    return retval;
+        size_t bytes_written = 0;
+    char *kern_buf = NULL;
+    size_t write_size = count;
+    
+    // Allocate memory for the write operation
+    kern_buf = kmalloc(write_size, GFP_KERNEL);
+    if (!kern_buf) {
+        return -ENOMEM;
+    }
+
+    // Copy data from user space to kernel space
+    if (copy_from_user(kern_buf, buf, write_size)) {
+        kfree(kern_buf);
+        return -EFAULT;
+    }
+
+    // Lock access to buffer to ensure thread safety
+    mutex_lock(&aesd_device.lock);
+
+    // Store the write command in the circular buffer
+    aesd_device.entry[aesd_device.head].buff = kern_buf;
+    aesd_device.entry[aesd_device.head].size = write_size;
+    aesd_device.head = (aesd_device.head + 1) % AESD_MAX_WRITE_COMMANDS;
+
+    // If buffer is full, free memory for the oldest write
+    if (aesd_device.head == aesd_device.tail) {
+        kfree(aesd_device.entry[aesd_device.tail].buff);
+        aesd_device.tail = (aesd_device.tail + 1) % AESD_MAX_WRITE_COMMANDS;
+    }
+
+    mutex_unlock(&aesd_device.lock);
+
+    return count;
 }
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
@@ -80,39 +171,39 @@ static int aesd_setup_cdev(struct aesd_dev *dev)
     cdev_init(&dev->cdev, &aesd_fops);
     dev->cdev.owner = THIS_MODULE;
     dev->cdev.ops = &aesd_fops;
-    err = cdev_add (&dev->cdev, devno, 1);
+    err = cdev_add(&dev->cdev, devno, 1);
     if (err) {
         printk(KERN_ERR "Error %d adding aesd cdev", err);
     }
     return err;
 }
 
-
-
 int aesd_init_module(void)
 {
-    dev_t dev = 0;
     int result;
-    result = alloc_chrdev_region(&dev, aesd_minor, 1,
-            "aesdchar");
-    aesd_major = MAJOR(dev);
+    dev_t dev;
+
+    // Allocate major and minor numbers
+    result = alloc_chrdev_region(&dev, 0, 1, "aesdchar");
     if (result < 0) {
-        printk(KERN_WARNING "Can't get major %d\n", aesd_major);
+        printk(KERN_WARNING "aesdchar: can't allocate major number\n");
         return result;
     }
-    memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-    /**
-     * TODO: initialize the AESD specific portion of the device
-     */
-
-    result = aesd_setup_cdev(&aesd_device);
-
-    if( result ) {
+    // Register the character device
+    cdev_init(&aesd_device.cdev, &aesd_fops);
+    aesd_device.cdev.owner = THIS_MODULE;
+    result = cdev_add(&aesd_device.cdev, dev, 1);
+    if (result) {
+        printk(KERN_WARNING "aesdchar: can't add device\n");
         unregister_chrdev_region(dev, 1);
+        return result;
     }
-    return result;
 
+    mutex_init(&aesd_device.lock);
+    printk(KERN_INFO "aesdchar: module loaded\n");
+
+    return 0;
 }
 
 void aesd_cleanup_module(void)
@@ -122,13 +213,18 @@ void aesd_cleanup_module(void)
     cdev_del(&aesd_device.cdev);
 
     /**
-     * TODO: cleanup AESD specific poritions here as necessary
+     * Cleanup AESD specific portions here
      */
+    int i; 
+    for (i = 0; i < AESD_MAX_WRITE_COMMANDS; i++) {
+        if (aesd_device.entry[i].buff) {
+            kfree(aesd_device.entry[i].buff);
+        }
+    }
 
     unregister_chrdev_region(devno, 1);
 }
 
-
-
 module_init(aesd_init_module);
 module_exit(aesd_cleanup_module);
+

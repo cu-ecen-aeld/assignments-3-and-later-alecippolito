@@ -22,14 +22,14 @@
 #else
 #  define PDEBUG(fmt, args...) /* not debugging: nothing */
 #endif
-
+/*
 struct aesd_dev
 {
-    /**
-     * TODO: Add structure(s) and locks needed to complete assignment requirements
-     */
-    struct cdev cdev;     /* Char device structure      */
+
+    struct cdev cdev;    
 };
+ */
+
 
 
 #endif /* AESD_CHAR_DRIVER_AESDCHAR_H_ */

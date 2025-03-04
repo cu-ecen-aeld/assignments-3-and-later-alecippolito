@@ -15,19 +15,19 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <time.h>
+// #include <time.h>
 #include <sys/queue.h>
 
 // Define constants
 #define PORT 9000
-#define FILE_PATH "/var/tmp/aesdsocketdata"
+#define FILE_PATH "/dev/aesdchar"
 #define BUFFER_SIZE 1024
 #define PID_FILE "/var/run/aesdsocket.pid"
 
 int sockfd = -1;
 
 pthread_mutex_t file_mutex;
-timer_t timer_id;
+//timer_t timer_id;
 struct thread_node {
     pthread_t thread_id;
     SLIST_ENTRY(thread_node) nodes;
@@ -106,6 +106,7 @@ void daemonize() {
     }
 }
 
+/*
 void timer_handler(union sigval sv) {
     (void)sv; // Mark sv as intentionally unused
     time_t now = time(NULL);
@@ -143,7 +144,7 @@ void setup_timer() {
         exit(1);
     }
 }
-
+*/
 void *handle_connection(void *arg) {
     int client_sockfd = *(int *)arg;
     free(arg); // Free the allocated memory
@@ -269,7 +270,7 @@ int main(int argc, char *argv[]) {
 
     pthread_mutex_init(&file_mutex, NULL);
     SLIST_INIT(&head);
-    setup_timer();
+    // setup_timer();
 
     // Accept
     while (true) {

@@ -20,6 +20,7 @@
 #include <linux/slab.h> // for kmalloc, kfree
 #include <linux/uaccess.h> // for copy_to_user, copy_from_user
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
 
 #define AESD_MAX_WRITE_COMMANDS 10
 
@@ -51,6 +52,49 @@ struct aesd_circular_buffer {
     int write_pos;
     spinlock_t lock;
 };
+// extern struct aesd_command aesd_buffer[AESD_MAX_WRITE_COMMANDS]; 
+
+// Your ioctl handler function
+static long aesd_char_driver_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    struct aesd_seekto seek_data;
+    int ret = 0;
+
+    switch (cmd) {
+        case AESDCHAR_IOCSEEKTO:
+            // Copy the data from user-space to kernel-space
+            if (copy_from_user(&seek_data, (struct aesd_seekto __user *)arg, sizeof(seek_data))) {
+                return -EFAULT;  // Return error if user-to-kernel copy fails
+            }
+
+            // Check if the provided write command index is within valid range
+            if (seek_data.write_cmd >= AESD_MAX_WRITE_COMMANDS || seek_data.write_cmd_offset >= aesd_device.entry[seek_data.write_cmd].size) {
+                return -EINVAL;  // Return error for invalid index or offset
+            }
+
+            // Calculate the position we need to seek to
+            unsigned int pos = 0;
+
+            // Calculate the byte offset for the requested seek command and offset
+            int i;
+            for (i=0; i < seek_data.write_cmd; i++) {
+                // pos += aesd_buffer[i].size;  // Add up the size of previous commands
+            }
+
+            // pos += seek_data.write_cmd_offset;  // Add the offset within the current command
+
+            // Set the file pointer to the desired position
+            file->f_pos = pos;
+
+            break;
+
+        default:
+            ret = -ENOTTY;  // Return error for unsupported commands
+            break;
+    }
+
+    return ret;
+}
 
 // Initialize the circular buffer
 struct aesd_circular_buffer aesd_buffer = {
@@ -58,6 +102,39 @@ struct aesd_circular_buffer aesd_buffer = {
     .write_pos = 0,
     .lock = __SPIN_LOCK_UNLOCKED(aesd_buffer.lock),
 };
+
+loff_t aesd_llseek(struct file *filp, loff_t offset, int whence)
+{
+    loff_t new_pos = 0;
+    size_t total_size = 0;
+    int i;
+
+    mutex_lock(&aesd_device.lock);
+    for (i = 0; i < AESD_MAX_WRITE_COMMANDS; i++) {
+        total_size += aesd_device.entry[i].size;
+    }
+    mutex_unlock(&aesd_device.lock);
+
+    switch (whence) {
+        case SEEK_SET:
+            new_pos = offset;
+            break;
+        case SEEK_CUR:
+            new_pos = filp->f_pos + offset;
+            break;
+        case SEEK_END:
+            new_pos = total_size + offset;
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    if (new_pos < 0 || new_pos > total_size)
+        return -EINVAL;
+
+    filp->f_pos = new_pos;
+    return new_pos;
+}
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
@@ -162,6 +239,7 @@ struct file_operations aesd_fops = {
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+    .llseek =   aesd_llseek,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
